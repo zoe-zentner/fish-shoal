@@ -1,0 +1,854 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Shoal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root {
+  --abyss: #3e6b75;
+  --glass: #203b43;
+  --line: rgba(236, 228, 205, 0.18);
+  --ink: #ece4cd;
+  --ink-dim: #a9b8ac;
+  --lure: #f1e4c3;
+  --font-body: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body {
+  margin: 0;
+  overflow: hidden;
+  background: var(--abyss);
+  color: var(--ink);
+  font-family: var(--font-body);
+  -webkit-tap-highlight-color: transparent;
+}
+#sea {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: none;
+  touch-action: none;
+}
+.hint {
+  position: fixed;
+  top: calc(16px + env(safe-area-inset-top, 0px));
+  left: max(16px, env(safe-area-inset-left, 0px));
+  max-width: calc(100vw - 32px);
+  margin: 0;
+  pointer-events: none;
+  font-size: 0.86rem;
+  line-height: 1.45;
+  color: var(--ink);
+  text-shadow: 0 1px 2px rgba(14, 32, 40, 0.5);
+}
+.hint kbd {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--lure);
+}
+.panel {
+  position: fixed;
+  right: max(16px, env(safe-area-inset-right, 0px));
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  width: min(230px, calc(100vw - 32px));
+  background: var(--glass);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  cursor: default;
+}
+.panel:not([open]) { width: auto; }
+.panel summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 9px;
+  cursor: pointer;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-dim);
+}
+.panel summary::-webkit-details-marker { display: none; }
+.panel summary:focus-visible { outline: 2px solid var(--lure); outline-offset: -2px; }
+.chev { transition: transform 0.2s; font-family: var(--font-mono); }
+.panel[open] .chev { transform: rotate(180deg); }
+.panel-body {
+  display: grid;
+  gap: 10px;
+  padding: 2px 10px 10px;
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
+}
+.row { display: grid; gap: 4px; }
+.row label {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.82rem;
+}
+.row output {
+  font-family: var(--font-mono);
+  font-size: 0.76rem;
+  color: var(--ink-dim);
+  font-variant-numeric: tabular-nums;
+}
+input[type="range"] {
+  width: 100%;
+  margin: 0;
+  accent-color: var(--lure);
+}
+input[type="range"]:focus-visible { outline: 2px solid var(--lure); outline-offset: 3px; }
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.82rem;
+}
+.check input { accent-color: var(--lure); margin: 0; }
+.row label.check { justify-content: flex-start; }
+button.reset {
+  justify-self: start;
+  font: inherit;
+  font-size: 0.78rem;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+button.reset:hover { border-color: var(--lure); }
+button.reset:focus-visible { outline: 2px solid var(--lure); outline-offset: 2px; }
+</style>
+</head>
+<body>
+<canvas id="sea" aria-label="A shoal of fish following a lure through water. Move the pointer to lead the lure, click to scatter the fish."></canvas>
+
+<p class="hint">Lead the bait through the water. <kbd>Click</kbd> to scatter the shoal.</p>
+
+<details class="panel" id="panel">
+  <summary>Settings <span class="chev" aria-hidden="true">▾</span></summary>
+  <div class="panel-body">
+    <div class="row">
+      <label for="count">Number of fish <output id="countOut"></output></label>
+      <input type="range" id="count" min="20" max="900" step="10">
+    </div>
+    <div class="row">
+      <label for="drag">Water drag <output id="dragOut"></output></label>
+      <input type="range" id="drag" min="0" max="3" step="0.05">
+    </div>
+    <div class="row">
+      <label for="sep">Fish separation <output id="sepOut"></output></label>
+      <input type="range" id="sep" min="0" max="4" step="0.1">
+    </div>
+    <div class="row">
+      <label for="ali">Shoal alignment <output id="aliOut"></output></label>
+      <input type="range" id="ali" min="0" max="3" step="0.1">
+    </div>
+    <div class="row">
+      <label for="coh">Shoal cohesion <output id="cohOut"></output></label>
+      <input type="range" id="coh" min="0" max="3" step="0.1">
+    </div>
+    <div class="row">
+      <label for="seek">Follow the bait <output id="seekOut"></output></label>
+      <input type="range" id="seek" min="0" max="3" step="0.1">
+    </div>
+    <div class="row">
+      <label class="check" for="ghost"><input type="checkbox" id="ghost"> Show the real pointer</label>
+    </div>
+    <button class="reset" id="reset" type="button">Reset to defaults</button>
+  </div>
+</details>
+
+<script>
+(() => {
+  "use strict";
+
+  // settings (these are what the sliders change)
+  const isSmall = Math.min(window.innerWidth, window.innerHeight) < 600;
+  const DEFAULTS = {
+    count: isSmall ? 160 : 320,
+    drag: 1,        // water drag multiplier
+    sep: 1.8,
+    ali: 1.0,
+    coh: 0.9,
+    seek: 1.0,
+    ghost: false,
+  };
+  const S = { ...DEFAULTS };
+
+  const PERCEPTION = 56;     // how far each fish can see
+  const PERSONAL_SPACE = 20;
+  const MAX_SPEED = 300;     // px per second
+  const MIN_SPEED = 90;      // so they never stop completely
+  const MAX_FORCE = 680;
+  const SCATTER_RADIUS = 230;
+  const PANIC_HALF_LIFE = 0.75; // secs
+
+  // canvas setup
+  const canvas = document.getElementById("sea");
+  const ctx = canvas.getContext("2d");
+  let W = 0, H = 0, DPR = 1;
+
+  function resize() {
+    const w = window.innerWidth, h = window.innerHeight;
+    if (w < 2 || h < 2) return; // ignore if window is basically 0 size
+    DPR = Math.min(window.devicePixelRatio || 1, 2);
+    W = w;
+    H = h;
+    canvas.width = Math.round(W * DPR);
+    canvas.height = Math.round(H * DPR);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+    buildBackground();
+    for (const f of fish) {
+      f.x = Math.min(Math.max(f.x, 0), W);
+      f.y = Math.min(Math.max(f.y, 0), H);
+    }
+  }
+
+  // real mouse position (cursor is hidden with css)
+  const pointer = { x: 0, y: 0, active: false };
+
+  // the lure - pulled towards the mouse by a spring, slowed down by the water
+  // a = k(target - pos) - b*v - c*|v|*v
+  // the |v|*v bit is quadratic drag (like real water) so moving fast gets
+  // resisted way more than moving slowly
+  const lure = { x: 0, y: 0, vx: 0, vy: 0, speed: 0 };
+  const SPRING = 38;
+  const LINEAR_DAMP = 6.5;
+  const QUAD_DRAG = 0.016;
+
+  function updateLure(dt, t) {
+    let tx, ty;
+    if (pointer.active) {
+      tx = pointer.x; ty = pointer.y;
+    } else {
+      // move around on its own until the mouse is used
+      tx = W * 0.5 + Math.cos(t * 0.37) * W * 0.28;
+      ty = H * 0.55 + Math.sin(t * 0.61) * H * 0.22;
+    }
+    const steps = 4;
+    const h = dt / steps;
+    for (let i = 0; i < steps; i++) {
+      const speed = Math.hypot(lure.vx, lure.vy);
+      const c = QUAD_DRAG * S.drag;
+      const ax = SPRING * (tx - lure.x) - LINEAR_DAMP * lure.vx - c * speed * lure.vx;
+      const ay = SPRING * (ty - lure.y) - LINEAR_DAMP * lure.vy - c * speed * lure.vy;
+      lure.vx += ax * h;
+      lure.vy += ay * h;
+      lure.x += lure.vx * h;
+      lure.y += lure.vy * h;
+    }
+    lure.speed = Math.hypot(lure.vx, lure.vy);
+
+    // bubbles when it's going fast
+    if (lure.speed > 260 && Math.random() < Math.min(1, lure.speed / 900)) {
+      spawnBubble(lure.x, lure.y, 0.6);
+    }
+  }
+
+  // fish
+  // colours are [hue, sat, light, how common]
+  const PALETTE = [
+    [212, 42, 27, 0.58], // blue
+    [196, 20, 66, 0.20], // silver
+    [40, 82, 57, 0.13],  // gold
+    [12, 72, 60, 0.09],  // coral
+  ];
+  function pickTone() {
+    let r = Math.random();
+    for (const tone of PALETTE) { if ((r -= tone[3]) <= 0) return tone; }
+    return PALETTE[0];
+  }
+  let fish = [];
+
+  function makeFish() {
+    const depth = Math.random(); // 0 = deep, 1 = near surface
+    const tone = pickTone();
+    const a = Math.random() * Math.PI * 2;
+
+    // give each fish a personality - some leaders, some stragglers, mostly normal
+    // reaction = how long it takes to notice the lure has moved
+    const r = Math.random();
+    let p;
+    if (r < 0.14) p = { kind: "straggler", seekMul: 0.62 + Math.random() * 0.15, speed: 0.84 + Math.random() * 0.1, reaction: 0.35 + Math.random() * 0.3, wander: 1.35 };
+    else if (r < 0.26) p = { kind: "leader", seekMul: 1.35 + Math.random() * 0.25, speed: 1.15 + Math.random() * 0.2, reaction: 0.04 + Math.random() * 0.08, wander: 0.5 };
+    else p = { kind: "follower", seekMul: 0.75 + Math.random() * 0.4, speed: 0.88 + Math.random() * 0.24, reaction: 0.15 + Math.random() * 0.35, wander: 1 };
+
+    return {
+      kind: p.kind,
+      seekMul: p.seekMul,
+      reaction: p.reaction,
+      wanderMul: p.wander,
+      wander: Math.random() * Math.PI * 2,
+      memX: lure.x, memY: lure.y,
+      burst: 0,
+      burstTimer: 1 + Math.random() * 8,
+      x: Math.random() * W,
+      y: Math.random() * H,
+      vx: Math.cos(a) * 80,
+      vy: Math.sin(a) * 80,
+      angle: a,
+      len: (7 + depth * 9) * (0.8 + Math.random() * 0.45),
+      depth,
+      hue: tone[0] + (Math.random() - 0.5) * 12,
+      sat: tone[1] + (Math.random() - 0.5) * 10,
+      lit: tone[2] + (Math.random() - 0.5) * 8,
+      flash: 0,
+      phase: Math.random() * Math.PI * 2,
+      panic: 0,
+      fleeX: 0, fleeY: 0,
+      speedJitter: p.speed,
+    };
+  }
+
+  function setFishCount(n) {
+    while (fish.length < n) fish.push(makeFish());
+    if (fish.length > n) fish.length = n;
+    fish.sort((a, b) => a.depth - b.depth); // deeper fish drawn first
+  }
+
+  // spatial grid so each fish only checks the fish in nearby cells
+  // (checking every fish against every other fish was too slow with lots of fish)
+  const CELL = PERCEPTION;
+  let cols = 0, rows = 0, grid = [];
+
+  function buildGrid() {
+    cols = Math.max(1, Math.ceil(W / CELL));
+    rows = Math.max(1, Math.ceil(H / CELL));
+    const needed = cols * rows;
+    if (grid.length !== needed) grid = Array.from({ length: needed }, () => []);
+    for (const cell of grid) cell.length = 0;
+    for (const f of fish) {
+      const cx = Math.min(cols - 1, Math.max(0, (f.x / CELL) | 0));
+      const cy = Math.min(rows - 1, Math.max(0, (f.y / CELL) | 0));
+      grid[cy * cols + cx].push(f);
+    }
+  }
+
+  function limit(x, y, max) {
+    const m = Math.hypot(x, y);
+    if (m > max) return [x / m * max, y / m * max];
+    return [x, y];
+  }
+
+  // steering = desired velocity - current velocity (from Reynolds' boids)
+  function steer(f, dx, dy, speed, maxForce) {
+    const m = Math.hypot(dx, dy);
+    if (m < 1e-6) return [0, 0];
+    return limit(dx / m * speed - f.vx, dy / m * speed - f.vy, maxForce);
+  }
+
+  const panicDecay = (dt) => Math.pow(0.5, dt / PANIC_HALF_LIFE);
+
+  function updateFish(dt) {
+    buildGrid();
+    const decay = panicDecay(dt);
+    const p2 = PERCEPTION * PERCEPTION;
+    let panickedCount = 0;
+
+    for (const f of fish) {
+      let n = 0, sumVx = 0, sumVy = 0, sumX = 0, sumY = 0;
+      let sepX = 0, sepY = 0, neighbourPanic = 0;
+
+      const cx = (f.x / CELL) | 0, cy = (f.y / CELL) | 0;
+      for (let gy = cy - 1; gy <= cy + 1; gy++) {
+        if (gy < 0 || gy >= rows) continue;
+        for (let gx = cx - 1; gx <= cx + 1; gx++) {
+          if (gx < 0 || gx >= cols) continue;
+          for (const o of grid[gy * cols + gx]) {
+            if (o === f) continue;
+            const dx = o.x - f.x, dy = o.y - f.y;
+            const d2 = dx * dx + dy * dy;
+            if (d2 > p2) continue;
+            n++;
+            sumVx += o.vx; sumVy += o.vy;
+            sumX += o.x; sumY += o.y;
+            if (o.panic > neighbourPanic) neighbourPanic = o.panic;
+            if (d2 < PERSONAL_SPACE * PERSONAL_SPACE && d2 > 0.01) {
+              const d = Math.sqrt(d2);
+              sepX -= dx / d / d * PERSONAL_SPACE;
+              sepY -= dy / d / d * PERSONAL_SPACE;
+            }
+          }
+        }
+      }
+
+      // panic spreads to neighbours a bit then wears off
+      f.panic = Math.max(f.panic * decay, neighbourPanic * 0.55 * decay);
+      if (f.panic < 0.01) f.panic = 0;
+      if (f.panic > 0.15) panickedCount++;
+
+      // each fish has its own idea of where the lure is, which lags behind
+      // depending on its reaction time - this is what makes the stragglers
+      const k = 1 - Math.exp(-dt / f.reaction);
+      f.memX += (lure.x - f.memX) * k;
+      f.memY += (lure.y - f.memY) * k;
+
+      // random quick bursts of speed
+      f.burstTimer -= dt;
+      if (f.burstTimer <= 0) {
+        f.burst = 0.6 + Math.random() * 0.4;
+        f.burstTimer = 3 + Math.random() * 9;
+      }
+      f.burst *= Math.pow(0.5, dt / 0.22);
+
+      const panic = f.panic;
+      const maxSpeed = MAX_SPEED * f.speedJitter * (1 + panic * 1.6 + f.burst * 0.8);
+      const maxForce = MAX_FORCE * (1 + panic * 2.5 + f.burst);
+      let ax = 0, ay = 0;
+
+      // wander so they don't all swim in perfectly straight lines
+      f.wander += (Math.random() - 0.5) * dt * 7;
+      const wa = f.angle + Math.sin(f.wander) * 1.2;
+      ax += Math.cos(wa) * 110 * f.wanderMul + Math.cos(f.angle) * f.burst * 900;
+      ay += Math.sin(wa) * 110 * f.wanderMul + Math.sin(f.angle) * f.burst * 900;
+
+      if (n > 0) {
+        const [sx, sy] = steer(f, sepX, sepY, maxSpeed, maxForce);
+        const [lx, ly] = steer(f, sumVx / n, sumVy / n, maxSpeed, maxForce);
+        const [cxF, cyF] = steer(f, sumX / n - f.x, sumY / n - f.y, maxSpeed, maxForce);
+        ax += sx * S.sep + lx * S.ali + cxF * S.coh * (1 - panic);
+        ay += sy * S.sep + ly * S.ali + cyF * S.coh * (1 - panic);
+      }
+
+      // follow the lure
+      const mdx = f.memX - f.x, mdy = f.memY - f.y;
+      const md = Math.hypot(mdx, mdy);
+      if (md > 1) {
+        const arrive = Math.min(1, md / 120);
+        const [kx, ky] = steer(f, mdx, mdy, maxSpeed * arrive, maxForce);
+        // try harder if it's got left really far behind
+        const catchUp = md > 220 ? Math.min(2.5, 1 + (md - 220) / 180) : 1;
+        const w = S.seek * f.seekMul * catchUp * (1 - panic);
+        ax += kx * w;
+        ay += ky * w;
+      }
+      // don't get too close to the lure itself
+      const ldx = lure.x - f.x, ldy = lure.y - f.y;
+      const ld = Math.hypot(ldx, ldy);
+      if (ld < 38 && ld > 0.5) {
+        const [vx, vy] = steer(f, -ldx, -ldy, maxSpeed, maxForce);
+        ax += vx * S.seek * 1.2;
+        ay += vy * S.seek * 1.2;
+      }
+
+      // swim away from where the click was
+      if (panic > 0) {
+        const [fx, fy] = steer(f, f.x - f.fleeX, f.y - f.fleeY, maxSpeed, maxForce);
+        ax += fx * 3 * panic;
+        ay += fy * 3 * panic;
+      }
+
+      // keep away from the edges
+      const m = 60;
+      if (f.x < m) ax += (m - f.x) * 6;
+      if (f.x > W - m) ax -= (f.x - (W - m)) * 6;
+      if (f.y < m) ay += (m - f.y) * 6;
+      if (f.y > H - m) ay -= (f.y - (H - m)) * 6;
+
+      f.vx += ax * dt;
+      f.vy += ay * dt;
+      const sp = Math.hypot(f.vx, f.vy);
+      if (sp > maxSpeed) { f.vx = f.vx / sp * maxSpeed; f.vy = f.vy / sp * maxSpeed; }
+      else if (sp < MIN_SPEED && sp > 0) { f.vx = f.vx / sp * MIN_SPEED; f.vy = f.vy / sp * MIN_SPEED; }
+
+      f.x += f.vx * dt;
+      f.y += f.vy * dt;
+      if (!Number.isFinite(f.x) || !Number.isFinite(f.y) || !Number.isFinite(f.vx) || !Number.isFinite(f.vy)) {
+        f.x = Math.random() * W; f.y = Math.random() * H;
+        f.vx = 80; f.vy = 0; f.memX = lure.x; f.memY = lure.y;
+      }
+
+      // wrap around if one gets out anyway
+      if (f.x < -40) f.x = W + 30; else if (f.x > W + 40) f.x = -30;
+      if (f.y < -40) f.y = H + 30; else if (f.y > H + 40) f.y = -30;
+
+      // turn smoothly instead of snapping round
+      const target = Math.atan2(f.vy, f.vx);
+      let diff = target - f.angle;
+      diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+      const turn = diff * Math.min(1, dt * 14);
+      f.angle += turn;
+
+      // fish flash silver when they turn (like real ones do when light hits their side)
+      const turnRate = dt > 0 ? Math.abs(turn) / dt : 0;
+      const flashTarget = Math.min(1, Math.max(0, (turnRate - 1.2) / 3));
+      f.flash += (flashTarget - f.flash) * Math.min(1, dt * (flashTarget > f.flash ? 18 : 4));
+
+      // tail wiggles faster when swimming faster
+      f.phase += dt * (6 + Math.hypot(f.vx, f.vy) * 0.09);
+    }
+    return panickedCount;
+  }
+
+  // click to scatter
+  const ripples = [];
+  function scatter(x, y) {
+    ripples.push({ x, y, r: 6, life: 1 });
+    for (const f of fish) {
+      const d = Math.hypot(f.x - x, f.y - y);
+      if (d < SCATTER_RADIUS) {
+        const strength = 1 - (d / SCATTER_RADIUS) * 0.5;
+        if (strength > f.panic) {
+          f.panic = strength;
+          f.fleeX = x; f.fleeY = y;
+        }
+      }
+    }
+    for (let i = 0; i < 14; i++) spawnBubble(x, y, 1);
+  }
+
+  // bubbles
+  const bubbles = [];
+  function spawnBubble(x, y, spread) {
+    if (bubbles.length > 220) return;
+    bubbles.push({
+      x: x + (Math.random() - 0.5) * 14 * spread,
+      y: y + (Math.random() - 0.5) * 14 * spread,
+      vx: (Math.random() - 0.5) * 40 * spread,
+      vy: -30 - Math.random() * 50,
+      r: 1 + Math.random() * 2.6,
+      life: 1,
+      wob: Math.random() * 6,
+    });
+  }
+
+  // background - only drawn once then reused every frame
+  let bg = null;
+  function buildBackground() {
+    bg = document.createElement("canvas");
+    bg.width = canvas.width;
+    bg.height = canvas.height;
+    const b = bg.getContext("2d");
+    b.setTransform(DPR, 0, 0, DPR, 0, 0);
+    const g = b.createRadialGradient(W * 0.42, H * 0.38, 0, W * 0.5, H * 0.5, Math.hypot(W, H) * 0.62);
+    g.addColorStop(0, "#4f8089");
+    g.addColorStop(0.6, "#3e6b75");
+    g.addColorStop(1, "#2a4c56");
+    b.fillStyle = g;
+    b.fillRect(0, 0, W, H);
+
+    // random darker patches
+    for (let i = 0; i < 9; i++) {
+      const x = Math.random() * W, y = Math.random() * H;
+      const r = 120 + Math.random() * 260;
+      const p = b.createRadialGradient(x, y, 0, x, y, r);
+      p.addColorStop(0, "rgba(20, 42, 52, 0.22)");
+      p.addColorStop(1, "rgba(20, 42, 52, 0)");
+      b.fillStyle = p;
+      b.fillRect(x - r, y - r, r * 2, r * 2);
+    }
+    const specks = Math.round((W * H) / 60);
+    for (let i = 0; i < specks; i++) {
+      const light = Math.random() < 0.5;
+      b.fillStyle = light ? "rgba(236, 228, 205, 0.035)" : "rgba(14, 32, 40, 0.06)";
+      const s = Math.random() < 0.9 ? 1 : 2;
+      b.fillRect(Math.random() * W, Math.random() * H, s, s);
+    }
+  }
+
+  // caustics (the wobbly light patterns on the bottom)
+  // first version recalculated every pixel every frame and was way too slow,
+  // so now it makes one tile at the start and slides two copies of it around
+  const TILE = 256;
+  let causticPattern = null;
+
+  function buildCausticTile() {
+    const c = document.createElement("canvas");
+    c.width = c.height = TILE;
+    const cx = c.getContext("2d");
+    const img = cx.createImageData(TILE, TILE);
+    const d = img.data;
+    const k = (Math.PI * 2) / TILE; // so the tile repeats without a seam
+    for (let y = 0; y < TILE; y++) {
+      for (let x = 0; x < TILE; x++) {
+        const v = Math.sin(k * 2 * x + Math.sin(k * y) * 1.6)
+                + Math.sin(k * 3 * y + Math.sin(k * 2 * x) * 1.3)
+                + Math.sin(k * (x + y) + Math.sin(k * (x - y)) * 1.1);
+        let b = 1 - Math.abs(v) * 0.85;
+        b = b > 0 ? b * b * b * b : 0;
+        const i = (y * TILE + x) * 4;
+        d[i] = 226; d[i + 1] = 242; d[i + 2] = 238;
+        d[i + 3] = b * 255;
+      }
+    }
+    cx.putImageData(img, 0, 0);
+    causticPattern = ctx.createPattern(c, "repeat");
+  }
+
+  function drawCaustics(t) {
+    if (!causticPattern) buildCausticTile();
+    // scale THEN translate, otherwise the bigger layer jumps when it loops
+    const layer = (scale, alpha, dx, dy) => {
+      ctx.save();
+      ctx.fillStyle = causticPattern;
+      ctx.globalAlpha = alpha;
+      ctx.scale(scale, scale);
+      ctx.translate(dx % TILE, dy % TILE);
+      ctx.fillRect(-TILE, -TILE, W / scale + TILE * 2, H / scale + TILE * 2);
+      ctx.restore();
+    };
+    layer(1, 0.035, t * 9, t * 5);
+    layer(1.35, 0.025, -t * 5, t * 6);
+  }
+
+  // drawing
+  // fish shape is built along a bendy spine, with a wave going down it
+  // so the tail moves more than the head
+  const SPINE = 7;
+  const PROFILE = [0.42, 0.92, 1, 0.86, 0.6, 0.34, 0.12];
+  const sx = new Float32Array(SPINE), sy = new Float32Array(SPINE);
+
+  function drawFish(f, shadow) {
+    const L = f.len;
+    const W2 = L * 0.13;
+    const amp = L * 0.16 * (1 + f.burst * 0.6);
+    const alpha = 0.55 + f.depth * 0.45;
+    // shadow is offset more for fish nearer the top
+    const off = shadow ? 4 + f.depth * 9 : 0;
+
+    for (let i = 0; i < SPINE; i++) {
+      const s = i / (SPINE - 1);
+      sx[i] = L * 0.5 - s * L;
+      sy[i] = Math.sin(f.phase - s * 3) * amp * s * s;
+    }
+
+    ctx.save();
+    ctx.translate(f.x + off, f.y + off * 1.3);
+    ctx.rotate(f.angle);
+    // go lighter/greyer while flashing
+    const fl = f.flash;
+    const lit = f.lit + (88 - f.lit) * fl * 0.75;
+    const sat = f.sat * (1 - fl * 0.6);
+    const bodyColour = `hsla(${f.hue}, ${sat}%, ${lit}%, ${alpha})`;
+    ctx.fillStyle = shadow
+      ? "rgba(12, 28, 36, 0.24)"
+      : `hsla(${f.hue}, ${sat}%, ${lit}%, ${alpha * 0.7})`; // fins slightly transparent
+
+    // side fins
+    const fx = sx[1] - L * 0.04, fy = sy[1];
+    const finSwing = Math.sin(f.phase * 0.5) * L * 0.04;
+    ctx.beginPath();
+    ctx.moveTo(fx, fy - W2 * 0.8);
+    ctx.lineTo(fx - L * 0.16, fy - W2 * 2.1 - finSwing);
+    ctx.lineTo(fx - L * 0.1, fy - W2 * 0.7);
+    ctx.moveTo(fx, fy + W2 * 0.8);
+    ctx.lineTo(fx - L * 0.16, fy + W2 * 2.1 + finSwing);
+    ctx.lineTo(fx - L * 0.1, fy + W2 * 0.7);
+    ctx.fill();
+
+    // body - down one side and back up the other
+    if (!shadow) ctx.fillStyle = bodyColour;
+    ctx.beginPath();
+    ctx.moveTo(sx[0] + L * 0.05, sy[0]);
+    for (let i = 0; i < SPINE; i++) ctx.lineTo(sx[i], sy[i] - PROFILE[i] * W2);
+    for (let i = SPINE - 1; i >= 0; i--) ctx.lineTo(sx[i], sy[i] + PROFILE[i] * W2);
+    ctx.closePath();
+    ctx.fill();
+
+    // tail
+    const tx = sx[SPINE - 1], ty = sy[SPINE - 1];
+    const bend = (sy[SPINE - 1] - sy[SPINE - 2]) * 1.4;
+    ctx.beginPath();
+    ctx.moveTo(tx + 1, ty);
+    ctx.lineTo(tx - L * 0.2, ty - L * 0.15 + bend);
+    ctx.lineTo(tx - L * 0.1, ty + bend * 0.5);
+    ctx.lineTo(tx - L * 0.2, ty + L * 0.15 + bend);
+    ctx.closePath();
+    ctx.fill();
+
+    // lighter line down the back
+    if (!shadow && L > 8) {
+      ctx.strokeStyle = `hsla(${f.hue}, ${sat * 0.6}%, ${Math.min(95, lit + 22)}%, ${alpha * (0.35 + fl * 0.5)})`;
+      ctx.lineWidth = W2 * 0.55;
+      ctx.lineCap = "round";
+      ctx.beginPath();
+      ctx.moveTo(sx[0] - L * 0.04, sy[0]);
+      for (let i = 1; i < SPINE - 2; i++) ctx.lineTo(sx[i], sy[i]);
+      ctx.stroke();
+    }
+
+    ctx.restore();
+  }
+
+  // the lure + its trail
+  const wake = [];
+  function drawLure() {
+    wake.push(lure.x, lure.y);
+    if (wake.length > 36) wake.splice(0, 2);
+
+    ctx.lineCap = "round";
+    for (let i = 2; i < wake.length; i += 2) {
+      const a = i / wake.length;
+      ctx.strokeStyle = `rgba(236, 228, 205, ${a * 0.35})`;
+      ctx.lineWidth = 1 + a * 3;
+      ctx.beginPath();
+      ctx.moveTo(wake[i - 2], wake[i - 1]);
+      ctx.lineTo(wake[i], wake[i + 1]);
+      ctx.stroke();
+    }
+
+    const stretch = Math.min(0.45, lure.speed / 1500);
+    ctx.save();
+    ctx.translate(lure.x, lure.y);
+    ctx.rotate(Math.atan2(lure.vy, lure.vx));
+    ctx.scale(1 + stretch, 1 - stretch * 0.4);
+    ctx.fillStyle = "#f1e4c3";
+    ctx.strokeStyle = "#203b43";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(0, 0, 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function drawGhostPointer() {
+    if (!pointer.active) return;
+    ctx.save();
+    ctx.strokeStyle = "rgba(226, 243, 241, 0.5)";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([3, 5]);
+    ctx.beginPath();
+    ctx.moveTo(pointer.x, pointer.y);
+    ctx.lineTo(lure.x, lure.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(pointer.x - 6, pointer.y); ctx.lineTo(pointer.x + 6, pointer.y);
+    ctx.moveTo(pointer.x, pointer.y - 6); ctx.lineTo(pointer.x, pointer.y + 6);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // main loop
+  let last = performance.now();
+  const start = last;
+
+  function frame(now) {
+    requestAnimationFrame(frame); // call this first so an error doesn't freeze everything
+    try {
+      if (!(W > 1 && H > 1)) { last = now; resize(); return; }
+      step(now);
+    } catch (err) {
+      console.error(err);
+      last = now;
+    }
+  }
+
+  function step(now) {
+    const dt = Math.min(0.05, Math.max(0, (now - last) / 1000)); // cap it, otherwise switching tabs breaks things
+    last = now;
+    const t = (now - start) / 1000;
+    if (!Number.isFinite(lure.x) || !Number.isFinite(lure.y)) {
+      lure.x = W / 2; lure.y = H / 2; lure.vx = lure.vy = 0;
+    }
+
+    updateLure(dt, t);
+    updateFish(dt);
+
+    ctx.drawImage(bg, 0, 0, W, H);
+    drawCaustics(t);
+
+    for (const f of fish) drawFish(f, true);
+    for (const f of fish) drawFish(f, false);
+
+    // ripples
+    for (let i = ripples.length - 1; i >= 0; i--) {
+      const r = ripples[i];
+      r.r += 340 * dt;
+      r.life -= dt * 1.4;
+      if (r.life <= 0) { ripples.splice(i, 1); continue; }
+      ctx.strokeStyle = `rgba(236, 228, 205, ${r.life * 0.45})`;
+      ctx.lineWidth = 2 * r.life;
+      ctx.beginPath();
+      ctx.arc(r.x, r.y, r.r, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // bubbles
+    for (let i = bubbles.length - 1; i >= 0; i--) {
+      const b = bubbles[i];
+      b.vx *= 0.96;
+      b.x += (b.vx + Math.sin(t * 6 + b.wob) * 12) * dt;
+      b.y += b.vy * dt;
+      b.life -= dt * 0.55;
+      if (b.life <= 0 || b.y < -10) { bubbles.splice(i, 1); continue; }
+      ctx.fillStyle = `rgba(236, 228, 205, ${b.life * 0.4})`;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.r * 0.8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    if (S.ghost) drawGhostPointer();
+    drawLure();
+
+  }
+
+  // mouse/touch
+  canvas.addEventListener("pointermove", (e) => {
+    pointer.x = e.clientX; pointer.y = e.clientY;
+    pointer.active = true;
+  });
+  canvas.addEventListener("pointerdown", (e) => {
+    pointer.x = e.clientX; pointer.y = e.clientY;
+    pointer.active = true;
+    scatter(lure.x, lure.y);
+  });
+
+  // settings panel
+  const controls = [
+    ["count", (v) => v, (v) => setFishCount(v)],
+    ["drag", (v) => v.toFixed(2) + "×"],
+    ["sep", (v) => v.toFixed(1)],
+    ["ali", (v) => v.toFixed(1)],
+    ["coh", (v) => v.toFixed(1)],
+    ["seek", (v) => v.toFixed(1)],
+  ];
+  function syncControls() {
+    for (const [id, fmt] of controls) {
+      document.getElementById(id).value = S[id];
+      document.getElementById(id + "Out").textContent = fmt(S[id]);
+    }
+    document.getElementById("ghost").checked = S.ghost;
+  }
+  for (const [id, fmt, onChange] of controls) {
+    const input = document.getElementById(id);
+    input.addEventListener("input", () => {
+      S[id] = parseFloat(input.value);
+      document.getElementById(id + "Out").textContent = fmt(S[id]);
+      if (onChange) onChange(S[id]);
+    });
+  }
+  document.getElementById("ghost").addEventListener("change", (e) => { S.ghost = e.target.checked; });
+  document.getElementById("reset").addEventListener("click", () => {
+    Object.assign(S, DEFAULTS);
+    setFishCount(S.count);
+    syncControls();
+  });
+
+  // start
+  window.addEventListener("resize", resize);
+  if (window.ResizeObserver) new ResizeObserver(() => resize()).observe(document.documentElement);
+  resize();
+  lure.x = W / 2; lure.y = H / 2;
+  pointer.x = W / 2; pointer.y = H / 2;
+  setFishCount(S.count);
+  syncControls();
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
